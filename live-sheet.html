@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Live S3 Sheet — AWS Security Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#0a0c0f;--surface:#111418;--border:#1e2530;--border-hi:#2a3545;
+  --text:#e2e8f0;--muted:#64748b;--accent:#38bdf8;
+  --crit:#ff4545;--high:#ff8c00;--med:#f5c842;--safe:#22d68a;
+  --crit-bg:rgba(255,69,69,.08);--high-bg:rgba(255,140,0,.08);--med-bg:rgba(245,200,66,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;
+  background-image:radial-gradient(ellipse 80% 50% at 50% -20%,rgba(56,189,248,.06),transparent),
+  radial-gradient(ellipse 60% 40% at 80% 80%,rgba(34,214,138,.03),transparent)}
+
+/* ── Nav ── */
+nav{background:rgba(10,12,15,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);
+  padding:0 40px;display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:200;height:58px}
+.nav-logo{display:flex;align-items:center;gap:12px}
+.nav-logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),#0ea5e9);
+  border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.nav-logo-text{font-size:17px;font-weight:800;letter-spacing:-.5px}
+.nav-logo-sub{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.nav-links{display:flex;align-items:center;gap:4px}
+.nav-link{padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;
+  color:var(--muted);text-decoration:none;transition:all .18s;cursor:pointer;border:none;background:none}
+.nav-link:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.nav-link.active{color:var(--accent);background:rgba(56,189,248,.1)}
+.nav-right{display:flex;align-items:center;gap:10px}
+
+/* ── Buttons ── */
+.btn-primary{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:9px;
+  border:none;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;
+  transition:all .18s;background:var(--accent);color:#0a0c0f}
+.btn-primary:hover{background:#7dd3fc;transform:translateY(-1px)}
+.btn-secondary{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9px;
+  border:1px solid var(--border-hi);font-family:'Syne',sans-serif;font-size:13px;font-weight:600;
+  cursor:pointer;transition:all .18s;background:transparent;color:var(--text)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-primary:disabled,.btn-secondary:disabled{opacity:.4;cursor:not-allowed;transform:none!important}
+.btn-dl{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:8px;
+  border:1px solid rgba(34,214,138,.3);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;
+  cursor:pointer;transition:all .18s;background:rgba(34,214,138,.08);color:var(--safe)}
+.btn-dl:hover{background:rgba(34,214,138,.18);border-color:var(--safe)}
+.btn-dl:disabled{opacity:.3;cursor:not-allowed}
+
+/* ── Layout ── */
+main{padding:32px 40px;max-width:1400px;margin:0 auto}
+
+/* ── Page header ── */
+.page-hdr{display:flex;align-items:flex-start;justify-content:space-between;
+  margin-bottom:28px;gap:20px;flex-wrap:wrap}
+.page-hdr-left h1{font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:6px}
+.page-hdr-left p{font-size:13px;color:var(--muted);line-height:1.6}
+.page-hdr-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* ── Stats row ── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:16px 18px;transition:all .2s}
+.stat-card:hover{border-color:var(--border-hi)}
+.stat-label{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;
+  text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.stat-val{font-size:28px;font-weight:800;line-height:1}
+.stat-val.pub{color:var(--crit)}.stat-val.priv{color:var(--safe)}
+.stat-val.neutral{color:var(--accent)}.stat-val.warn{color:var(--med)}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* ── Toolbar ── */
+.toolbar{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;
+  justify-content:space-between;gap:16px;flex-wrap:wrap}
+.toolbar-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.toolbar-right{display:flex;align-items:center;gap:8px}
+.scan-info{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+#last-scanned{color:var(--accent)}
+
+/* ── Filter bar ── */
+.filter-row{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.filter-row input,.filter-row select{background:var(--surface);border:1px solid var(--border-hi);
+  color:var(--text);border-radius:8px;padding:8px 12px;
+  font-family:'JetBrains Mono',monospace;font-size:12px;outline:none;transition:border .2s}
+.filter-row input:focus,.filter-row select:focus{border-color:var(--accent)}
+.filter-row input{width:240px}
+.filter-row select{cursor:pointer;min-width:130px}
+.filter-row select option{background:#111418}
+.filter-sep{width:1px;height:22px;background:var(--border);flex-shrink:0}
+.filter-lbl{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap}
+.btn-reset{padding:7px 13px;border-radius:8px;border:1px solid var(--border-hi);
+  background:transparent;color:var(--muted);font-size:11px;cursor:pointer;
+  transition:all .18s;font-family:'JetBrains Mono',monospace}
+.btn-reset:hover{color:var(--accent);border-color:var(--accent)}
+.result-info{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;
+  margin-left:auto;white-space:nowrap}
+
+/* ── Table panel ── */
+.table-panel{background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;overflow:hidden}
+.table-hdr{padding:14px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between}
+.table-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:10px}
+.tbl-badge{background:rgba(56,189,248,.15);color:var(--accent);font-size:11px;
+  font-family:'JetBrains Mono',monospace;padding:3px 9px;border-radius:20px;font-weight:600}
+.pub-badge{background:var(--crit-bg);color:var(--crit);border:1px solid rgba(255,69,69,.2)}
+.priv-badge{background:rgba(34,214,138,.08);color:var(--safe);border:1px solid rgba(34,214,138,.2)}
+
+table{width:100%;border-collapse:collapse}
+thead tr{border-bottom:1px solid var(--border);background:rgba(0,0,0,.15)}
+th{padding:11px 16px;text-align:left;font-size:10px;font-family:'JetBrains Mono',monospace;
+  color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:600;
+  cursor:pointer;user-select:none;white-space:nowrap}
+th:hover{color:var(--accent)}
+th .si{margin-left:3px;opacity:.3;font-size:9px}
+th.asc .si::after{content:'▲';opacity:1;color:var(--accent)}
+th.desc .si::after{content:'▼';opacity:1;color:var(--accent)}
+td{padding:12px 16px;font-size:13px;border-bottom:1px solid rgba(30,37,48,.5);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+.mono{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent)}
+.row-pub td{border-left:2px solid rgba(255,69,69,.3)}
+.row-priv td{border-left:2px solid rgba(34,214,138,.2)}
+
+/* ── Chips ── */
+.chip{font-size:10px;font-family:'JetBrains Mono',monospace;padding:3px 7px;
+  border-radius:4px;display:inline-flex;align-items:center;gap:3px}
+.chip.ok{background:rgba(34,214,138,.1);color:var(--safe)}
+.chip.fail{background:rgba(255,69,69,.1);color:var(--crit)}
+.chip.na{background:rgba(100,116,139,.1);color:var(--muted)}
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:6px;
+  font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;text-transform:uppercase}
+.badge.CRITICAL{background:var(--crit-bg);color:var(--crit);border:1px solid rgba(255,69,69,.2)}
+.badge.HIGH{background:var(--high-bg);color:var(--high);border:1px solid rgba(255,140,0,.2)}
+.badge.SAFE{background:rgba(34,214,138,.08);color:var(--safe);border:1px solid rgba(34,214,138,.2)}
+
+/* ── States ── */
+.state-box{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:60px 24px;gap:14px;color:var(--muted);font-size:13px;text-align:center}
+.state-icon{font-size:40px;opacity:.35}
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Excel hint ── */
+.excel-hint{display:flex;align-items:center;gap:10px;padding:12px 18px;
+  background:rgba(34,214,138,.05);border:1px solid rgba(34,214,138,.15);
+  border-radius:10px;margin-bottom:20px;font-size:12px;color:var(--muted)}
+.excel-hint strong{color:var(--safe)}
+
+@media(max-width:768px){
+  main{padding:18px}nav{padding:0 18px}
+  .stats-row{grid-template-columns:repeat(2,1fr)}
+  .toolbar{flex-direction:column;align-items:flex-start}
+  table{display:block;overflow-x:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- ── Navigation ── -->
+<nav>
+  <div class="nav-logo">
+    <div class="nav-logo-icon">🛡</div>
+    <div>
+      <div class="nav-logo-text">AWS Security</div>
+      <div class="nav-logo-sub">On-Demand Audit Dashboard</div>
+    </div>
+  </div>
+  <div class="nav-links">
+    <span class="nav-link" onclick="window.location.href='index.html'">📊 Security Dashboard</span>
+    <span class="nav-link active">⚡ Live S3 Sheet</span>
+  </div>
+  <div class="nav-right">
+    <span class="scan-info">Last scanned: <span id="last-scanned">—</span></span>
+  </div>
+</nav>
+
+<main>
+
+  <!-- Page header -->
+  <div class="page-hdr">
+    <div class="page-hdr-left">
+      <h1>⚡ Live S3 Bucket Sheet</h1>
+      <p>Real-time view of all S3 buckets in your account — public &amp; private.<br>
+         Data updates on every scan. Filter, sort and download on demand.</p>
+    </div>
+    <div class="page-hdr-right">
+      <button class="btn-secondary" id="btn-refresh" onclick="runScan()">🔄 Refresh Scan</button>
+      <button class="btn-primary"   id="btn-scan"    onclick="runScan()">⚡ Scan Now</button>
+      <button class="btn-dl"        id="btn-dl"      onclick="downloadCSV()" disabled>⬇ Download CSV</button>
+    </div>
+  </div>
+
+  <!-- Excel hint -->
+  <div class="excel-hint">
+    📊 &nbsp;<strong>Excel Auto-Sync:</strong>&nbsp; Every scan also writes results to
+    <strong>s3_tracker.xlsx → "Live Sheet - S3"</strong> tab in the same folder as app.py.
+    Open the file in Excel / Numbers to view the formatted version.
+  </div>
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Buckets</div>
+      <div class="stat-val neutral" id="stat-total">—</div>
+      <div class="stat-sub">in this account</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Public Buckets</div>
+      <div class="stat-val pub" id="stat-public">—</div>
+      <div class="stat-sub">exposed / vulnerable</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Private Buckets</div>
+      <div class="stat-val priv" id="stat-private">—</div>
+      <div class="stat-sub">fully blocked</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">With Owner Tag</div>
+      <div class="stat-val warn" id="stat-owned">—</div>
+      <div class="stat-sub">have owner tag set</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <!-- Filter row inside toolbar -->
+      <span class="filter-lbl">🔍</span>
+      <input  id="f-search" type="text"  placeholder="Search bucket name..." oninput="applyFilter()"/>
+      <div class="filter-sep"></div>
+      <span class="filter-lbl">Status</span>
+      <select id="f-status" onchange="applyFilter()">
+        <option value="all">All Statuses</option>
+        <option value="Public">🔴 Public</option>
+        <option value="Private">✅ Private</option>
+      </select>
+      <div class="filter-sep"></div>
+      <span class="filter-lbl">Owner</span>
+      <select id="f-owner" onchange="applyFilter()">
+        <option value="all">All Owners</option>
+      </select>
+      <div class="filter-sep"></div>
+      <span class="filter-lbl">Risk</span>
+      <select id="f-risk" onchange="applyFilter()">
+        <option value="all">All Risk</option>
+        <option value="CRITICAL">🚨 Critical</option>
+        <option value="HIGH">🔴 High</option>
+        <option value="SAFE">✅ Safe</option>
+      </select>
+      <button class="btn-reset" onclick="resetFilter()">✕ Reset</button>
+    </div>
+    <div class="toolbar-right">
+      <span class="result-info" id="result-info">No data</span>
+    </div>
+  </div>
+
+  <!-- Table panel -->
+  <div class="table-panel">
+    <div class="table-hdr">
+      <div class="table-title">
+        🪣 S3 Bucket Inventory
+        <span class="tbl-badge" id="tbl-badge" style="display:none"></span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="pub-count" class="badge" style="display:none"></span>
+        <span id="priv-count" class="badge" style="display:none"></span>
+      </div>
+    </div>
+    <div id="table-wrap">
+      <div class="state-box">
+        <div class="state-icon">⚡</div>
+        <div>Click <strong>Scan Now</strong> to load all S3 buckets</div>
+        <button class="btn-primary" style="margin-top:8px" onclick="runScan()">⚡ Scan Now</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const API = 'http://localhost:5001/api';
+let allData = [];   // full unfiltered dataset
+let sortCol = 'bucket';
+let sortDir = 'asc';
+
+const F = {search:'', status:'all', owner:'all', risk:'all'};
+
+// ── Scan ──────────────────────────────────────────────────────────────────────
+async function runScan() {
+  const btnScan = document.getElementById('btn-scan');
+  const btnRef  = document.getElementById('btn-refresh');
+  btnScan.disabled=true; btnScan.textContent='⏳ Scanning...';
+  btnRef.disabled=true;
+
+  document.getElementById('table-wrap').innerHTML=`
+    <div class="state-box"><div class="spinner"></div>
+    <div>Scanning all S3 buckets… this may take a moment</div></div>`;
+
+  try {
+    const res  = await fetch(`${API}/s3-public`);
+    const data = await res.json();
+
+    // Use all_buckets (includes private) if available, else fall back to buckets
+    allData = data.all_buckets || data.buckets || [];
+
+    document.getElementById('last-scanned').textContent = new Date().toLocaleString();
+    updateStats();
+    populateOwnerFilter();
+    applyFilter();
+
+    document.getElementById('btn-dl').disabled = false;
+  } catch(e) {
+    document.getElementById('table-wrap').innerHTML=`
+      <div class="state-box">
+        <div class="state-icon">⚠️</div>
+        <div style="color:var(--crit)">Cannot connect to backend.<br>
+        Make sure app.py is running on port 5001.</div>
+      </div>`;
+  }
+
+  btnScan.disabled=false; btnScan.textContent='⚡ Scan Now';
+  btnRef.disabled=false;  btnRef.textContent='🔄 Refresh Scan';
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function updateStats() {
+  const total   = allData.length;
+  const pub     = allData.filter(b=>b.status==='Public').length;
+  const priv    = allData.filter(b=>b.status==='Private').length;
+  const owned   = allData.filter(b=>b.owner && b.owner!=='null').length;
+
+  document.getElementById('stat-total').textContent   = total;
+  document.getElementById('stat-public').textContent  = pub;
+  document.getElementById('stat-private').textContent = priv;
+  document.getElementById('stat-owned').textContent   = owned;
+
+  // Header badges
+  const pb=document.getElementById('pub-count');
+  const pvb=document.getElementById('priv-count');
+  if(pub>0){pb.textContent=`${pub} Public`;pb.className='badge CRITICAL';pb.style.display='inline-flex';}
+  else pb.style.display='none';
+  if(priv>0){pvb.textContent=`${priv} Private`;pvb.className='badge SAFE';pvb.style.display='inline-flex';}
+  else pvb.style.display='none';
+}
+
+// ── Owner filter ──────────────────────────────────────────────────────────────
+function populateOwnerFilter() {
+  const owners = [...new Set(allData.map(b=>b.owner||'null'))].sort();
+  const sel = document.getElementById('f-owner');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="all">All Owners</option>' +
+    owners.map(o=>`<option value="${o}" ${cur===o?'selected':''}>${o}</option>`).join('');
+}
+
+// ── Filter + sort ─────────────────────────────────────────────────────────────
+function applyFilter() {
+  F.search = document.getElementById('f-search').value.toLowerCase();
+  F.status = document.getElementById('f-status').value;
+  F.owner  = document.getElementById('f-owner').value;
+  F.risk   = document.getElementById('f-risk').value;
+  renderTable();
+}
+
+function resetFilter() {
+  F.search=''; F.status='all'; F.owner='all'; F.risk='all';
+  document.getElementById('f-search').value='';
+  document.getElementById('f-status').value='all';
+  document.getElementById('f-owner').value='all';
+  document.getElementById('f-risk').value='all';
+  renderTable();
+}
+
+function sortBy(col) {
+  if(sortCol===col) sortDir = sortDir==='asc'?'desc':'asc';
+  else { sortCol=col; sortDir='asc'; }
+  document.querySelectorAll('th[data-col]').forEach(th=>{
+    th.className='';
+    if(th.dataset.col===col) th.className=sortDir;
+  });
+  renderTable();
+}
+
+function renderTable() {
+  let rows = allData.filter(b=>{
+    const ms = !F.search || b.bucket.toLowerCase().includes(F.search);
+    const mv = F.status==='all' || b.status===F.status;
+    const mo = F.owner==='all'  || (b.owner||'null')===F.owner;
+    const mr = F.risk==='all'   || b.risk===F.risk;
+    return ms && mv && mo && mr;
+  });
+
+  // Sort
+  rows.sort((a,b)=>{
+    let va='', vb='';
+    if(sortCol==='bucket')   { va=a.bucket;                 vb=b.bucket; }
+    if(sortCol==='status')   { va=a.status||'';             vb=b.status||''; }
+    if(sortCol==='owner')    { va=(a.owner||'null');         vb=(b.owner||'null'); }
+    if(sortCol==='risk')     { va=a.risk||'';               vb=b.risk||''; }
+    if(sortCol==='age')      { va=String(a.age_days||0);    vb=String(b.age_days||0); }
+    const cmp = typeof va==='number'
+      ? va-vb
+      : String(va).localeCompare(String(vb));
+    return sortDir==='asc'?cmp:-cmp;
+  });
+
+  // Info
+  document.getElementById('result-info').textContent=`Showing ${rows.length} of ${allData.length} buckets`;
+  const tb=document.getElementById('tbl-badge');
+  tb.textContent=`${rows.length} buckets`; tb.style.display='inline-flex';
+
+  if(rows.length===0) {
+    document.getElementById('table-wrap').innerHTML=`
+      <div class="state-box"><div class="state-icon">🔎</div>
+      <div>No buckets match your current filters</div></div>`;
+    return;
+  }
+
+  const html = rows.map(b=>{
+    const det   = b.details || {};
+    const pub   = b.status==='Public';
+    const owner = (b.owner && b.owner!=='null')
+      ? `<span style="color:var(--text)">${b.owner}</span>`
+      : `<span style="color:var(--muted);font-style:italic">null</span>`;
+
+    const statusCell = pub
+      ? `<span style="color:var(--crit);font-weight:700;font-size:12px">🔴 Public</span>`
+      : `<span style="color:var(--safe);font-weight:700;font-size:12px">✅ Private</span>`;
+
+    const riskCell = b.risk==='SAFE'
+      ? `<span class="badge SAFE">SAFE</span>`
+      : `<span class="badge ${b.risk}">${b.risk}</span>`;
+
+    const aclChip = (key, label) => {
+      const v = det[key];
+      if(v===undefined||v===null) return `<span class="chip na">— ${label}</span>`;
+      return v
+        ? `<span class="chip ok">✓ ${label}</span>`
+        : `<span class="chip fail">✗ ${label}</span>`;
+    };
+
+    return `<tr class="${pub?'row-pub':'row-priv'}">
+      <td class="mono" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${b.bucket}">${b.bucket}</td>
+      <td>${statusCell}</td>
+      <td style="font-size:12px">${owner}</td>
+      <td>${riskCell}</td>
+      <td style="font-size:12px;color:var(--muted)">${b.reason||'—'}</td>
+      <td>
+        <div style="display:flex;flex-wrap:wrap;gap:3px">
+          ${aclChip('BlockPublicAcls','Block ACLs')}
+          ${aclChip('IgnorePublicAcls','Ignore ACLs')}
+          ${aclChip('BlockPublicPolicy','Block Policy')}
+          ${aclChip('RestrictPublicBuckets','Restrict Buckets')}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('table-wrap').innerHTML=`
+    <table>
+      <thead><tr>
+        <th data-col="bucket"  onclick="sortBy('bucket')"  class="${sortCol==='bucket'?sortDir:''}">Bucket Name <span class="si"></span></th>
+        <th data-col="status"  onclick="sortBy('status')"  class="${sortCol==='status'?sortDir:''}">Status <span class="si"></span></th>
+        <th data-col="owner"   onclick="sortBy('owner')"   class="${sortCol==='owner'?sortDir:''}">Owner (Tag) <span class="si"></span></th>
+        <th data-col="risk"    onclick="sortBy('risk')"    class="${sortCol==='risk'?sortDir:''}">Risk <span class="si"></span></th>
+        <th>Reason</th>
+        <th>Public Access Block Settings</th>
+      </tr></thead>
+      <tbody>${html}</tbody>
+    </table>`;
+}
+
+// ── CSV download ──────────────────────────────────────────────────────────────
+function downloadCSV() {
+  if(!allData.length) return;
+  const esc = v=>{const s=String(v??'');return(s.includes(',')||s.includes('"')||s.includes('\n'))?`"${s.replace(/"/g,'""')}"`:`${s}`};
+  const hdrs = ['Bucket Name','Status','Owner (Tag)','Risk','Reason','BlockPublicAcls','IgnorePublicAcls','BlockPublicPolicy','RestrictPublicBuckets'];
+  const rows = allData.map(b=>[
+    b.bucket, b.status||'', b.owner||'null', b.risk||'', b.reason||'',
+    b.details?.BlockPublicAcls??'', b.details?.IgnorePublicAcls??'',
+    b.details?.BlockPublicPolicy??'', b.details?.RestrictPublicBuckets??''
+  ]);
+  const csv  = [hdrs,...rows].map(r=>r.map(esc).join(',')).join('\n');
+  const d    = new Date();
+  const ts   = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+  const a    = Object.assign(document.createElement('a'),{
+    href:URL.createObjectURL(new Blob([csv],{type:'text/csv'})),
+    download:`aws_s3_live_sheet_${ts}.csv`
+  });
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
+  const b = document.getElementById('btn-dl');
+  b.textContent='✅ Downloaded!'; setTimeout(()=>b.textContent='⬇ Download CSV',1600);
+}
+</script>
+</body>
+</html>

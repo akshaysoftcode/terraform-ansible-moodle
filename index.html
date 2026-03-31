@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>AWS Security Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:#0a0c0f; --surface:#111418; --border:#1e2530; --border-hi:#2a3545;
+  --text:#e2e8f0; --muted:#64748b; --accent:#38bdf8;
+  --crit:#ff4545; --high:#ff8c00; --med:#f5c842; --safe:#22d68a;
+  --crit-bg:rgba(255,69,69,.08); --high-bg:rgba(255,140,0,.08); --med-bg:rgba(245,200,66,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;
+  background-image:radial-gradient(ellipse 80% 50% at 50% -20%,rgba(56,189,248,.06),transparent),
+  radial-gradient(ellipse 60% 40% at 80% 80%,rgba(255,69,69,.04),transparent)}
+
+/* ── Nav ── */
+nav{background:rgba(10,12,15,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);
+  padding:0 40px;display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:200;height:58px}
+.nav-logo{display:flex;align-items:center;gap:12px}
+.nav-logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),#0ea5e9);
+  border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.nav-logo-text{font-size:17px;font-weight:800;letter-spacing:-.5px}
+.nav-logo-sub{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.nav-links{display:flex;align-items:center;gap:4px}
+.nav-link{padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;
+  color:var(--muted);text-decoration:none;transition:all .18s;cursor:pointer;border:none;background:none}
+.nav-link:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.nav-link.active{color:var(--accent);background:rgba(56,189,248,.1)}
+.nav-right{display:flex;align-items:center;gap:10px}
+#last-scan{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+
+/* ── Layout ── */
+main{padding:32px 40px;max-width:1300px;margin:0 auto}
+
+/* ── Scan bar ── */
+.scan-bar{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:22px 26px;margin-bottom:32px;display:flex;align-items:center;
+  justify-content:space-between;gap:20px}
+.scan-bar-left h2{font-size:16px;font-weight:700;margin-bottom:3px}
+.scan-bar-left p{font-size:12px;color:var(--muted)}
+.scan-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.btn-primary{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;
+  border-radius:9px;border:none;font-family:'Syne',sans-serif;font-size:13px;
+  font-weight:700;cursor:pointer;transition:all .18s;background:var(--accent);color:#0a0c0f}
+.btn-primary:hover{background:#7dd3fc;transform:translateY(-1px)}
+.btn-secondary{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;
+  border-radius:9px;border:1px solid var(--border-hi);font-family:'Syne',sans-serif;
+  font-size:13px;font-weight:600;cursor:pointer;transition:all .18s;
+  background:transparent;color:var(--text)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-primary:disabled,.btn-secondary:disabled{opacity:.4;cursor:not-allowed;transform:none!important}
+.btn-dl{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:8px;
+  border:1px solid rgba(34,214,138,.3);font-family:'Syne',sans-serif;font-size:12px;
+  font-weight:700;cursor:pointer;transition:all .18s;
+  background:rgba(34,214,138,.08);color:var(--safe)}
+.btn-dl:hover{background:rgba(34,214,138,.18);border-color:var(--safe)}
+.btn-dl:disabled{opacity:.3;cursor:not-allowed}
+
+/* ── Summary cards ── */
+.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:32px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:20px 22px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0}
+.card.s3::before{background:linear-gradient(90deg,var(--crit),var(--high))}
+.card.mfa::before{background:linear-gradient(90deg,var(--high),var(--med))}
+.card.keys::before{background:linear-gradient(90deg,var(--med),var(--safe))}
+.card:hover{border-color:var(--border-hi);transform:translateY(-2px)}
+.card.selected{border-color:var(--accent);background:rgba(56,189,248,.04)}
+.card-icon{position:absolute;top:16px;right:18px;font-size:22px;opacity:.25}
+.card-label{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;
+  text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.card-count{font-size:40px;font-weight:800;line-height:1;margin-bottom:5px}
+.card-count.zero{color:var(--safe)}.card-count.warn{color:var(--crit)}
+.card-desc{font-size:12px;color:var(--muted);margin-bottom:14px}
+
+/* ── Results panel ── */
+.results-panel{background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;overflow:hidden;min-height:280px}
+.panel-hdr{padding:16px 22px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between}
+.panel-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:10px}
+.panel-badge{background:rgba(56,189,248,.15);color:var(--accent);font-size:11px;
+  font-family:'JetBrains Mono',monospace;padding:3px 9px;border-radius:20px;font-weight:600}
+
+/* ── Filter bar ── */
+.filter-bar{display:flex;align-items:center;gap:8px;padding:10px 18px;
+  border-bottom:1px solid var(--border);flex-wrap:wrap;background:rgba(255,255,255,.01)}
+.filter-bar input,.filter-bar select{background:var(--bg);border:1px solid var(--border-hi);
+  color:var(--text);border-radius:7px;padding:6px 11px;
+  font-family:'JetBrains Mono',monospace;font-size:11px;outline:none;transition:border .2s}
+.filter-bar input:focus,.filter-bar select:focus{border-color:var(--accent)}
+.filter-bar input{width:200px}
+.filter-bar select{cursor:pointer}
+.filter-bar select option{background:#1a1f27}
+.filter-lbl{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap}
+.filter-sep{width:1px;height:18px;background:var(--border);margin:0 2px}
+.btn-reset{padding:5px 11px;border-radius:6px;border:1px solid var(--border-hi);
+  background:transparent;color:var(--muted);font-size:10px;cursor:pointer;
+  transition:all .18s;font-family:'JetBrains Mono',monospace}
+.btn-reset:hover{color:var(--accent);border-color:var(--accent)}
+.result-lbl{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-left:auto}
+
+/* ── Table ── */
+table{width:100%;border-collapse:collapse}
+thead tr{border-bottom:1px solid var(--border)}
+th{padding:11px 18px;text-align:left;font-size:10px;font-family:'JetBrains Mono',monospace;
+  color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:600}
+td{padding:12px 18px;font-size:13px;border-bottom:1px solid rgba(30,37,48,.6);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+.mono{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent)}
+
+/* ── Badges ── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;
+  font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;text-transform:uppercase}
+.badge.CRITICAL{background:var(--crit-bg);color:var(--crit);border:1px solid rgba(255,69,69,.2)}
+.badge.HIGH{background:var(--high-bg);color:var(--high);border:1px solid rgba(255,140,0,.2)}
+.badge.MEDIUM{background:var(--med-bg);color:var(--med);border:1px solid rgba(245,200,66,.2)}
+.badge.SAFE{background:rgba(34,214,138,.08);color:var(--safe);border:1px solid rgba(34,214,138,.2)}
+.chip{font-size:10px;font-family:'JetBrains Mono',monospace;padding:2px 7px;border-radius:4px}
+.chip.ok{background:rgba(34,214,138,.1);color:var(--safe)}
+.chip.fail{background:rgba(255,69,69,.1);color:var(--crit)}
+
+/* ── States ── */
+.state-box{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:56px 24px;gap:12px;color:var(--muted);font-size:13px;text-align:center}
+.state-icon{font-size:38px;opacity:.35}
+.spinner{width:30px;height:30px;border:3px solid var(--border);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+@media(max-width:768px){
+  main{padding:18px}nav{padding:0 18px}
+  .summary-grid{grid-template-columns:1fr}
+  .scan-bar{flex-direction:column;align-items:flex-start}
+  table{display:block;overflow-x:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- ── Navigation ── -->
+<nav>
+  <div class="nav-logo">
+    <div class="nav-logo-icon">🛡</div>
+    <div>
+      <div class="nav-logo-text">AWS Security</div>
+      <div class="nav-logo-sub">On-Demand Audit Dashboard</div>
+    </div>
+  </div>
+  <div class="nav-links">
+    <span class="nav-link active" onclick="window.location.href='index.html'">📊 Security Dashboard</span>
+    <span class="nav-link" onclick="window.location.href='live-sheet.html'">⚡ Live S3 Sheet</span>
+  </div>
+  <div class="nav-right">
+    <span id="last-scan">Not scanned yet</span>
+    <button class="btn-dl" id="btn-dl-all" onclick="downloadAll()" disabled>⬇ Download All CSV</button>
+  </div>
+</nav>
+
+<main>
+
+  <!-- Scan bar -->
+  <div class="scan-bar">
+    <div class="scan-bar-left">
+      <h2>Run Security Checks</h2>
+      <p>Uses credentials from ~/.aws/credentials &nbsp;·&nbsp; S3 scan auto-updates Excel Live Sheet</p>
+    </div>
+    <div class="scan-actions">
+      <button class="btn-secondary" id="btn-s3"   onclick="runScan('s3')">🪣 S3 Buckets</button>
+      <button class="btn-secondary" id="btn-mfa"  onclick="runScan('mfa')">👤 No MFA Users</button>
+      <button class="btn-secondary" id="btn-keys" onclick="runScan('keys')">🔑 Old Access Keys</button>
+      <button class="btn-primary"   id="btn-all"  onclick="runAll()">⚡ Scan All</button>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="summary-grid">
+    <div class="card s3" id="card-s3" onclick="showPanel('s3')">
+      <div class="card-icon">🪣</div>
+      <div class="card-label">S3 Public Buckets</div>
+      <div class="card-count" id="count-s3">—</div>
+      <div class="card-desc">Buckets with public access exposed</div>
+      <button class="btn-dl" id="dl-s3" onclick="event.stopPropagation();downloadCSV('s3')" disabled>⬇ Download CSV</button>
+    </div>
+    <div class="card mfa" id="card-mfa" onclick="showPanel('mfa')">
+      <div class="card-icon">👤</div>
+      <div class="card-label">No MFA Users</div>
+      <div class="card-count" id="count-mfa">—</div>
+      <div class="card-desc">Console users without MFA enabled</div>
+      <button class="btn-dl" id="dl-mfa" onclick="event.stopPropagation();downloadCSV('mfa')" disabled>⬇ Download CSV</button>
+    </div>
+    <div class="card keys" id="card-keys" onclick="showPanel('keys')">
+      <div class="card-icon">🔑</div>
+      <div class="card-label">Old Access Keys</div>
+      <div class="card-count" id="count-keys">—</div>
+      <div class="card-desc">Active keys older than 90 days</div>
+      <button class="btn-dl" id="dl-keys" onclick="event.stopPropagation();downloadCSV('keys')" disabled>⬇ Download CSV</button>
+    </div>
+  </div>
+
+  <!-- Results panel -->
+  <div class="results-panel">
+    <div class="panel-hdr">
+      <div class="panel-title">
+        <span id="panel-title-text">Select a scan above to view results</span>
+        <span class="panel-badge" id="panel-badge" style="display:none"></span>
+      </div>
+    </div>
+    <div id="panel-body">
+      <div class="state-box">
+        <div class="state-icon">🔍</div>
+        <div>Run a scan above to see results here</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const API   = 'http://localhost:5001/api';
+const state = {s3:null, mfa:null, keys:null};
+let   active = null;
+
+// S3 filter
+const F = {search:'', status:'all', owner:'all', sort:'name-asc'};
+
+// ── Scanning ──────────────────────────────────────────────────────────────────
+const EP   = {s3:'s3-public', mfa:'no-mfa', keys:'old-keys'};
+const LBLS = {s3:'🪣 S3 Buckets', mfa:'👤 No MFA Users', keys:'🔑 Old Access Keys'};
+
+async function runScan(type) {
+  const btn = document.getElementById(`btn-${type}`);
+  btn.disabled = true; btn.textContent = '⏳ Scanning...';
+  setCount(type,'...');
+  if(active===type) showLoading();
+  try {
+    const res  = await fetch(`${API}/${EP[type]}`);
+    const data = await res.json();
+    state[type] = data;
+    setCount(type, data.count ?? 0);
+    if(active===type) renderPanel(type);
+  } catch(e) {
+    state[type] = {error:'Cannot connect to backend. Is app.py running on port 5001?'};
+    setCount(type,'!');
+    if(active===type) renderPanel(type);
+  }
+  btn.disabled=false; btn.textContent=LBLS[type];
+  document.getElementById('last-scan').textContent='Last scan: '+new Date().toLocaleTimeString();
+  const dlBtn = document.getElementById(`dl-${type}`);
+  if(dlBtn && state[type] && !state[type].error) dlBtn.disabled=false;
+  const anyDone = ['s3','mfa','keys'].some(t=>state[t]&&!state[t].error);
+  document.getElementById('btn-dl-all').disabled=!anyDone;
+}
+
+async function runAll() {
+  const btn=document.getElementById('btn-all');
+  btn.disabled=true; btn.textContent='⏳ Running...';
+  await Promise.all(['s3','mfa','keys'].map(runScan));
+  btn.disabled=false; btn.textContent='⚡ Scan All';
+  if(!active) showPanel('s3');
+}
+
+// ── Panel ─────────────────────────────────────────────────────────────────────
+function showPanel(type) {
+  active=type;
+  document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById(`card-${type}`).classList.add('selected');
+  if(!state[type]){showLoading();return;}
+  renderPanel(type);
+}
+
+function renderPanel(type) {
+  const data=state[type];
+  const TITLES={s3:'🪣 S3 Buckets with Public Access',mfa:'👤 Console Users without MFA',keys:'🔑 Active Access Keys Older than 90 Days'};
+  document.getElementById('panel-title-text').textContent=TITLES[type];
+  if(data.error){
+    document.getElementById('panel-body').innerHTML=`<div class="state-box"><div class="state-icon">⚠️</div><div style="color:var(--crit)">${data.error}</div></div>`;
+    document.getElementById('panel-badge').style.display='none';
+    return;
+  }
+  const cnt=data.count??0;
+  const pb=document.getElementById('panel-badge');
+  pb.textContent=`${cnt} found`; pb.style.display='inline-flex';
+  if(cnt===0){
+    document.getElementById('panel-body').innerHTML=`<div class="state-box"><div class="state-icon">✅</div><div style="color:var(--safe);font-weight:700;">All Clear! No issues found.</div></div>`;
+    return;
+  }
+  if(type==='s3') renderS3(data);
+  if(type==='mfa') renderMfa(data);
+  if(type==='keys') renderKeys(data);
+}
+
+// ── S3 with filters ───────────────────────────────────────────────────────────
+function renderS3(data) {
+  const all=data.buckets||[];
+  const owners=[...new Set(all.map(b=>b.owner||'null'))].sort();
+  const ownerOpts=owners.map(o=>`<option value="${o}" ${F.owner===o?'selected':''}>${o}</option>`).join('');
+  document.getElementById('panel-body').innerHTML=`
+    <div class="filter-bar">
+      <span class="filter-lbl">🔍</span>
+      <input id="fs-search" type="text" placeholder="Search bucket name..." value="${F.search}" oninput="applyF()"/>
+      <div class="filter-sep"></div>
+      <span class="filter-lbl">Status</span>
+      <select id="fs-status" onchange="applyF()">
+        <option value="all" ${F.status==='all'?'selected':''}>All</option>
+        <option value="Public" ${F.status==='Public'?'selected':''}>🔴 Public</option>
+        <option value="Private" ${F.status==='Private'?'selected':''}>✅ Private</option>
+      </select>
+      <div class="filter-sep"></div>
+      <span class="filter-lbl">Owner</span>
+      <select id="fs-owner" onchange="applyF()">
+        <option value="all">All Owners</option>${ownerOpts}
+      </select>
+      <div class="filter-sep"></div>
+      <span class="filter-lbl">Sort</span>
+      <select id="fs-sort" onchange="applyF()">
+        <option value="name-asc"   ${F.sort==='name-asc'?'selected':''}>Name A→Z</option>
+        <option value="name-desc"  ${F.sort==='name-desc'?'selected':''}>Name Z→A</option>
+        <option value="status-pub" ${F.sort==='status-pub'?'selected':''}>Public First</option>
+        <option value="status-priv"${F.sort==='status-priv'?'selected':''}>Private First</option>
+      </select>
+      <button class="btn-reset" onclick="resetF()">✕ Reset</button>
+      <span class="result-lbl" id="s3-rlbl"></span>
+    </div>
+    <div id="s3-tbl"></div>`;
+  renderS3Table(all);
+}
+
+function applyF(){
+  F.search=document.getElementById('fs-search').value.toLowerCase();
+  F.status=document.getElementById('fs-status').value;
+  F.owner =document.getElementById('fs-owner').value;
+  F.sort  =document.getElementById('fs-sort').value;
+  renderS3Table(state.s3?.buckets||[]);
+}
+
+function resetF(){
+  F.search='';F.status='all';F.owner='all';F.sort='name-asc';
+  ['fs-search','fs-status','fs-owner','fs-sort'].forEach(id=>{
+    const el=document.getElementById(id); if(el){el.value=(id==='fs-search'?'':'all');}
+  });
+  document.getElementById('fs-sort').value='name-asc';
+  renderS3Table(state.s3?.buckets||[]);
+}
+
+function renderS3Table(buckets){
+  let rows=[...buckets].filter(b=>{
+    const ms=!F.search||b.bucket.toLowerCase().includes(F.search);
+    const mv=F.status==='all'||b.status===F.status;
+    const mo=F.owner==='all'||(b.owner||'null')===F.owner;
+    return ms&&mv&&mo;
+  });
+  rows.sort((a,b)=>{
+    if(F.sort==='name-asc')   return a.bucket.localeCompare(b.bucket);
+    if(F.sort==='name-desc')  return b.bucket.localeCompare(a.bucket);
+    if(F.sort==='status-pub') return (a.status==='Public'?0:1)-(b.status==='Public'?0:1);
+    if(F.sort==='status-priv')return (a.status==='Private'?0:1)-(b.status==='Private'?0:1);
+    return 0;
+  });
+  const rl=document.getElementById('s3-rlbl');
+  if(rl) rl.textContent=`Showing ${rows.length} of ${buckets.length} buckets`;
+  if(rows.length===0){
+    document.getElementById('s3-tbl').innerHTML=`<div class="state-box"><div class="state-icon">🔎</div><div>No buckets match your filters</div></div>`;
+    return;
+  }
+  const html=rows.map(b=>{
+    const det=b.details||{};
+    const chips=Object.entries(det).map(([k,v])=>
+      `<span class="chip ${v?'ok':'fail'}">${v?'✓':'✗'} ${k.replace(/([A-Z])/g,' $1').trim()}</span>`
+    ).join(' ');
+    const owner=(b.owner&&b.owner!=='null')?b.owner:`<span style="color:var(--muted);font-style:italic">null</span>`;
+    const stat=b.status==='Public'
+      ?`<span style="color:var(--crit);font-weight:700">🔴 Public</span>`
+      :`<span style="color:var(--safe);font-weight:700">✅ Private</span>`;
+    return `<tr><td class="mono">${b.bucket}</td><td>${stat}</td><td style="font-size:12px">${owner}</td>
+      <td><span class="badge ${b.risk==='SAFE'?'SAFE':b.risk}">${b.risk}</span></td>
+      <td><div style="display:flex;flex-wrap:wrap;gap:4px">${chips}</div></td></tr>`;
+  }).join('');
+  document.getElementById('s3-tbl').innerHTML=`
+    <table><thead><tr>
+      <th>Bucket Name</th><th>Status</th><th>Owner (Tag)</th><th>Risk</th><th>ACL Block Settings</th>
+    </tr></thead><tbody>${html}</tbody></table>`;
+}
+
+function renderMfa(data){
+  const rows=(data.users||[]).map(u=>`<tr>
+    <td class="mono">${u.username}</td>
+    <td style="color:var(--safe)">✅ Enabled</td>
+    <td style="color:var(--crit)">❌ Not Set</td>
+    <td style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted)">${u.last_login==='N/A'?'Never':u.last_login}</td>
+    <td><span class="badge HIGH">HIGH</span></td>
+  </tr>`).join('');
+  document.getElementById('panel-body').innerHTML=`
+    <table><thead><tr><th>Username</th><th>Console Access</th><th>MFA Status</th><th>Last Login</th><th>Risk</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+function renderKeys(data){
+  const rows=(data.keys||[]).map(k=>`<tr>
+    <td class="mono">${k.username}</td>
+    <td class="mono" style="color:var(--text)">${k.key_id}</td>
+    <td style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted)">${k.created}</td>
+    <td style="font-weight:700;color:${k.age_days>365?'var(--crit)':k.age_days>180?'var(--high)':'var(--med)'}">${k.age_days} days</td>
+    <td><span class="badge ${k.risk}">${k.risk}</span></td>
+  </tr>`).join('');
+  document.getElementById('panel-body').innerHTML=`
+    <table><thead><tr><th>Username</th><th>Access Key ID</th><th>Created</th><th>Age</th><th>Risk</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+function showLoading(){
+  document.getElementById('panel-body').innerHTML=`<div class="state-box"><div class="spinner"></div><div>Scanning AWS…</div></div>`;
+}
+
+function setCount(type,val){
+  const el=document.getElementById(`count-${type}`);
+  el.textContent=val;
+  el.className='card-count'+(val===0?' zero':val==='—'||val==='...'?'':' warn');
+}
+
+// ── CSV download ──────────────────────────────────────────────────────────────
+function toCSV(rows,hdrs){
+  const esc=v=>{const s=String(v??'');return(s.includes(',')||s.includes('"')||s.includes('\n'))?`"${s.replace(/"/g,'""')}"`:`${s}`};
+  return[hdrs.join(','),...rows.map(r=>r.map(esc).join(','))].join('\n');
+}
+function triggerDL(csv,fname){
+  const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([csv],{type:'text/csv'})),download:fname});
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+function ts(){const d=new Date();return`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`}
+
+function downloadCSV(type){
+  const data=state[type]; if(!data||data.error) return;
+  let csv,fname;
+  if(type==='s3'){
+    csv=toCSV((data.buckets||[]).map(b=>[b.bucket,b.status||'Public',b.owner||'null',b.risk,b.reason,
+      b.details?.BlockPublicAcls??'',b.details?.IgnorePublicAcls??'',
+      b.details?.BlockPublicPolicy??'',b.details?.RestrictPublicBuckets??'']),
+      ['Bucket Name','Status','Owner (Tag)','Risk','Reason','BlockPublicAcls','IgnorePublicAcls','BlockPublicPolicy','RestrictPublicBuckets']);
+    fname=`aws_s3_public_buckets_${ts()}.csv`;
+  }
+  if(type==='mfa'){
+    csv=toCSV((data.users||[]).map(u=>[u.username,'Enabled','NOT SET',u.last_login==='N/A'?'Never':u.last_login,'HIGH']),
+      ['Username','Console Access','MFA Status','Last Login','Risk']);
+    fname=`aws_no_mfa_users_${ts()}.csv`;
+  }
+  if(type==='keys'){
+    csv=toCSV((data.keys||[]).map(k=>[k.username,k.key_id,k.created,k.age_days,k.risk]),
+      ['Username','Access Key ID','Created Date','Age (Days)','Risk']);
+    fname=`aws_old_access_keys_${ts()}.csv`;
+  }
+  triggerDL(csv,fname);
+}
+
+function downloadAll(){
+  ['s3','mfa','keys'].forEach(t=>{if(state[t]&&!state[t].error) downloadCSV(t);});
+  const b=document.getElementById('btn-dl-all');
+  b.textContent='✅ Downloaded!';setTimeout(()=>b.textContent='⬇ Download All CSV',1600);
+}
+</script>
+</body>
+</html>
